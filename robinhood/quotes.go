@@ -1,0 +1,128 @@
+// Package robinhood
+package robinhood
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+)
+
+const APIFuturesProducts = "/arsenal/v1/futures/products/"
+
+// StockQuote from endpoint /quotes/{SYMBOL}
+//
+// Does not require authentication
+type StockQuote struct {
+	AskPrice      float64 `json:"ask_price,string"`
+	AskSize       int32   `json:"ask_size"`
+	BidSize       int32   `json:"bid_size"`
+	BidPrice      float64 `json:"bid_price,string"`
+	Symbol        string  `json:"symbol"`
+	InstrumentID  string  `json:"instrument_id"`
+	InstrumentURL string  `json:"instrument"`
+	TradingHalted bool    `json:"trading_halted"`
+}
+
+type StockQuotes struct {
+	Results []*StockQuote `json:"results"`
+}
+
+type RobinhoodClient struct {
+	HTTPClient *http.Client
+	BaseURL    string
+}
+
+func (rh *RobinhoodClient) BuildURLWithMultipleSymbols(endpoint string, symbols ...string) (*url.URL, error) {
+	baseURL, err := url.Parse(rh.BaseURL + endpoint)
+	if err != nil {
+		return nil, err
+	}
+	normalizedSymbols := make([]string, 0, len(symbols))
+	params := url.Values{}
+	for _, symbol := range symbols {
+		normalizedSymbols = append(normalizedSymbols, strings.ToUpper(symbol))
+	}
+	params.Add("symbols", strings.Join(normalizedSymbols, ","))
+	baseURL.RawQuery = params.Encode()
+	fmt.Print(baseURL.String(), "\n")
+	return baseURL, err
+}
+
+func (rh *RobinhoodClient) BuildURLWithSingleSymbol(endpoint string, symbol string) (*url.URL, error) {
+	baseURL, err := url.Parse(rh.BaseURL + endpoint + strings.ToUpper(symbol) + "/")
+	if err != nil {
+		return nil, err
+	}
+	return baseURL, err
+}
+
+// GetStockQuote returns a StockQuote struct
+//
+// Uses /quotes/{symbol} endpoint
+//
+// Example: "SPY" or "spy"
+func (rh *RobinhoodClient) GetStockQuote(symbol string) (*StockQuote, error) {
+	builtURL, err := rh.BuildURLWithSingleSymbol("/quotes/", symbol)
+	if err != nil {
+		return nil, err
+	}
+	response, err := rh.HTTPClient.Get(builtURL.String())
+	if err != nil {
+		return nil, err
+	}
+	body, err := io.ReadAll(response.Body)
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("bad status %s: %s", response.Status, string(body))
+	}
+	if err != nil {
+		return nil, err
+	}
+	err = response.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	var stockQuote StockQuote
+	err = json.Unmarshal(body, &stockQuote)
+	if err != nil {
+		return nil, err
+	}
+	return &stockQuote, nil
+}
+
+// GetStockQuotes returns a pointer to a StockQuote struct
+//
+// Uses /quotes/?symbols=..., endpoint
+//
+// Example: "SPY", "QQQ" or "spy", "Qqq"
+//
+// If invalid symbol returns nil for that symbol
+func (rh *RobinhoodClient) GetStockQuotes(symbols ...string) (*StockQuotes, error) {
+	builtURL, err := rh.BuildURLWithMultipleSymbols("/quotes/", symbols...)
+	if err != nil {
+		return nil, err
+	}
+	response, err := rh.HTTPClient.Get(builtURL.String())
+	if err != nil {
+		return nil, err
+	}
+	body, err := io.ReadAll(response.Body)
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("bad status %s: %s", response.Status, string(body))
+	}
+	if err != nil {
+		return nil, err
+	}
+	err = response.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	var stockQuotes StockQuotes
+	err = json.Unmarshal(body, &stockQuotes)
+	if err != nil {
+		return nil, err
+	}
+	return &stockQuotes, nil
+}
