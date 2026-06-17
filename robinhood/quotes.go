@@ -30,12 +30,7 @@ type StockQuotes struct {
 	Results []*StockQuote `json:"results"`
 }
 
-type RobinhoodClient struct {
-	HTTPClient *http.Client
-	BaseURL    string
-}
-
-func (rh *RobinhoodClient) BuildURLWithMultipleSymbols(endpoint string, symbols ...string) (*url.URL, error) {
+func (rh *RobinhoodClient) BuildRequestWithMultipleSymbols(endpoint string, symbols ...string) (*http.Request, error) {
 	baseURL, err := url.Parse(rh.BaseURL + endpoint)
 	if err != nil {
 		return nil, err
@@ -47,16 +42,24 @@ func (rh *RobinhoodClient) BuildURLWithMultipleSymbols(endpoint string, symbols 
 	}
 	params.Add("symbols", strings.Join(normalizedSymbols, ","))
 	baseURL.RawQuery = params.Encode()
-	fmt.Print(baseURL.String(), "\n")
-	return baseURL, err
-}
-
-func (rh *RobinhoodClient) BuildURLWithSingleSymbol(endpoint string, symbol string) (*url.URL, error) {
-	baseURL, err := url.Parse(rh.BaseURL + endpoint + strings.ToUpper(symbol) + "/")
+	request, err := http.NewRequest(http.MethodGet, baseURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
-	return baseURL, err
+	return request, err
+}
+
+// BuildRequestWithSingleSymbol create a request pointer
+func (rh *RobinhoodClient) BuildRequestWithSingleSymbol(endpoint string, symbol string) (*http.Request, error) {
+	requestURL, err := url.Parse(rh.BaseURL + endpoint + strings.ToUpper(symbol) + "/")
+	if err != nil {
+		return nil, err
+	}
+	request, err := http.NewRequest(http.MethodGet, requestURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	return request, err
 }
 
 // GetStockQuote returns a StockQuote struct
@@ -65,22 +68,19 @@ func (rh *RobinhoodClient) BuildURLWithSingleSymbol(endpoint string, symbol stri
 //
 // Example: "SPY" or "spy"
 func (rh *RobinhoodClient) GetStockQuote(symbol string) (*StockQuote, error) {
-	builtURL, err := rh.BuildURLWithSingleSymbol("/quotes/", symbol)
+	request, err := rh.BuildRequestWithSingleSymbol("/quotes/", symbol)
 	if err != nil {
 		return nil, err
 	}
-	response, err := rh.HTTPClient.Get(builtURL.String())
+	response, err := rh.HTTPClient.Do(request)
 	if err != nil {
 		return nil, err
 	}
 	body, err := io.ReadAll(response.Body)
+	defer response.Body.Close() //nolint:errcheck
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("bad status %s: %s", response.Status, string(body))
 	}
-	if err != nil {
-		return nil, err
-	}
-	err = response.Body.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func (rh *RobinhoodClient) GetStockQuote(symbol string) (*StockQuote, error) {
 	return &stockQuote, nil
 }
 
-// GetStockQuotes returns a pointer to a StockQuote struct
+// GetStockQuotes returns a pointer to a StockQuotes struct
 //
 // Uses /quotes/?symbols=..., endpoint
 //
@@ -100,22 +100,19 @@ func (rh *RobinhoodClient) GetStockQuote(symbol string) (*StockQuote, error) {
 //
 // If invalid symbol returns nil for that symbol
 func (rh *RobinhoodClient) GetStockQuotes(symbols ...string) (*StockQuotes, error) {
-	builtURL, err := rh.BuildURLWithMultipleSymbols("/quotes/", symbols...)
+	request, err := rh.BuildRequestWithMultipleSymbols("/quotes/", symbols...)
 	if err != nil {
 		return nil, err
 	}
-	response, err := rh.HTTPClient.Get(builtURL.String())
+	response, err := rh.HTTPClient.Do(request)
 	if err != nil {
 		return nil, err
 	}
 	body, err := io.ReadAll(response.Body)
+	defer response.Body.Close() //nolint:errcheck
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("bad status %s: %s", response.Status, string(body))
 	}
-	if err != nil {
-		return nil, err
-	}
-	err = response.Body.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -125,4 +122,21 @@ func (rh *RobinhoodClient) GetStockQuotes(symbols ...string) (*StockQuotes, erro
 		return nil, err
 	}
 	return &stockQuotes, nil
+}
+
+func (rh *RobinhoodClient) GetFutureQuote(symbol string) {
+}
+
+func (rh *RobinhoodClient) GetAllFutureProducts() {
+	response, err := rh.HTTPClient.Get(rh.BaseURL + APIFuturesProducts)
+	if err != nil {
+		return
+	}
+	body, err := io.ReadAll(response.Body)
+	fmt.Printf("%v", response.Request.URL)
+	defer response.Body.Close() //nolint:errcheck
+	if err != nil {
+		return
+	}
+	fmt.Print(string(body))
 }

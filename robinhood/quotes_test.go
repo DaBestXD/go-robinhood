@@ -17,6 +17,9 @@ func TestGetStockQuotes(t *testing.T) {
 		if v == nil {
 			t.Fatalf("exepected quote for %v got %v", validSymbols[i], err)
 		}
+		if v.Symbol != validSymbols[i] {
+			t.Fatalf("validSymbols %s does not match %s", validSymbols[i], v.Symbol)
+		}
 	}
 	badSymbols := []string{"NOWORKY", "MEOWMEOWCAT"}
 	quotes, err = rh.GetStockQuotes(badSymbols...)
@@ -24,7 +27,7 @@ func TestGetStockQuotes(t *testing.T) {
 		t.Fatalf("expected error for %s, got nil", badSymbols)
 	}
 	if quotes != nil {
-		t.Fatalf("expected %v quotes for %v, got %+v", nil, badSymbols, quotes)
+		t.Fatalf("expected nil for quotes for %v, got %+v", badSymbols, quotes)
 	}
 	mixedSymbols := []string{"NOWORKY", "SPY"}
 	quotes, err = rh.GetStockQuotes(mixedSymbols...)
@@ -32,11 +35,11 @@ func TestGetStockQuotes(t *testing.T) {
 		t.Fatalf("expected no error for %s, got %v", mixedSymbols, err)
 	}
 	if quotes == nil {
-		t.Fatalf("expected quotes for %v, got %v", mixedSymbols, nil)
+		t.Fatalf("expected quotes for %v, got nil", mixedSymbols)
 	}
 	for i, v := range quotes.Results {
 		if quotes.Results[0] != nil {
-			t.Fatalf("expected %v for %v got %v", nil, quotes.Results[i], v)
+			t.Fatalf("expected nil for %v got %v", quotes.Results[i], v)
 		}
 	}
 }
