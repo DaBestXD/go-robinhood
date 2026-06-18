@@ -7,7 +7,7 @@ import (
 )
 
 func TestGetStockQuotes(t *testing.T) {
-	rh := robinhood.NewRobinhoodClient()
+	rh := robinhood.NewRobinhoodClient(robinhood.NewFirefox())
 	validSymbols := []string{"QQQ", "SPY"}
 	quotes, err := rh.GetStockQuotes(validSymbols...)
 	if err != nil {
@@ -45,7 +45,7 @@ func TestGetStockQuotes(t *testing.T) {
 }
 
 func TestGetStockQuote(t *testing.T) {
-	rh := robinhood.NewRobinhoodClient()
+	rh := robinhood.NewRobinhoodClient(robinhood.NewFirefox())
 
 	validSymbol := "TSLA"
 	quote, err := rh.GetStockQuote(validSymbol)

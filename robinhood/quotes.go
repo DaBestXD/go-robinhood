@@ -127,16 +127,19 @@ func (rh *RobinhoodClient) GetStockQuotes(symbols ...string) (*StockQuotes, erro
 func (rh *RobinhoodClient) GetFutureQuote(symbol string) {
 }
 
-func (rh *RobinhoodClient) GetAllFutureProducts() {
-	response, err := rh.HTTPClient.Get(rh.BaseURL + APIFuturesProducts)
+func (rh *RobinhoodClient) GetAllFutureProducts() (string, error) {
+	request, err := rh.BuildGetRequest(APIFuturesProducts, nil)
 	if err != nil {
-		return
+		return "", err
+	}
+	response, err := rh.DoGetRequest(request)
+	if err != nil {
+		return "", err
 	}
 	body, err := io.ReadAll(response.Body)
-	fmt.Printf("%v", response.Request.URL)
 	defer response.Body.Close() //nolint:errcheck
 	if err != nil {
-		return
+		return "", err
 	}
-	fmt.Print(string(body))
+	return string(body), nil
 }

@@ -1,15 +1,16 @@
 package robinhood
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/golang/snappy"
-	"github.com/google/uuid"
 	"github.com/ncruces/go-sqlite3"
 )
 
@@ -55,28 +56,45 @@ const (
 
 type Browser interface {
 	String() string
-	OpenAndClose(waitTime float32, headless bool)
-	ExtractToken(pathToDB string) string
-	GetPathToDB() string
-	GetPathToExecutable()
+	// TODO: implement this later
+	// OpenAndClose(waitTime float64, headless bool)
+	ExtractToken() (string, error)
+	PathToDB() string
+	PathToExecutable() string
 }
 
 type Firefox struct {
-	PathToDB         string
-	PathToExecutable string
+	pathToDB         string
+	pathToExecutable string
+}
+
+func (f *Firefox) PathToExecutable() string {
+	return f.pathToExecutable
+}
+
+func (f *Firefox) PathToDB() string {
+	return f.pathToDB
 }
 
 func (f *Firefox) String() string {
-	return fmt.Sprintf("Firefox{PathToDB:%q, PathToExecutable:%q", f.PathToDB, f.PathToExecutable)
+	return fmt.Sprintf("Firefox{PathToDB:%q, PathToExecutable:%q", f.pathToDB, f.pathToExecutable)
 }
 
 type Chrome struct {
-	PathToDB         string
-	PathToExecutable string
+	pathToDB         string
+	pathToExecutable string
 }
 
 func (c *Chrome) String() string {
-	return fmt.Sprintf("Chrome{PathToDB:%q, PathToExecutable:%q", c.PathToDB, c.PathToExecutable)
+	return fmt.Sprintf("Chrome{PathToDB:%q, PathToExecutable:%q", c.pathToDB, c.pathToExecutable)
+}
+
+func (c *Chrome) PathToExecutable() string {
+	return c.pathToExecutable
+}
+
+func (c *Chrome) PathToDB() string {
+	return c.pathToDB
 }
 
 // Should only be used by newFirefox
@@ -146,8 +164,8 @@ func getFirefoxDBPath(homeDir string) string {
 
 func NewChrome() *Chrome {
 	return &Chrome{
-		PathToDB:         "",
-		PathToExecutable: "",
+		pathToDB:         "",
+		pathToExecutable: "",
 	}
 }
 
@@ -157,15 +175,15 @@ func NewFirefox() *Firefox {
 		panic(fmt.Errorf("unable to find home dir: %v", err))
 	}
 	return &Firefox{
-		PathToDB:         getFirefoxDBPath(homeDir),
-		PathToExecutable: getFirefoxExecutablePath(homeDir),
+		pathToDB:         getFirefoxDBPath(homeDir),
+		pathToExecutable: getFirefoxExecutablePath(homeDir),
 	}
 }
 
 // ExtractToken from local firefox sqlite database from web:auth_state,
 // then decode blob with snappy and return access_token string
 func (f *Firefox) ExtractToken() (string, error) {
-	conn, err := sqlite3.OpenFlags(f.PathToDB, sqlite3.OPEN_READONLY)
+	conn, err := sqlite3.OpenFlags(f.pathToDB, sqlite3.OPEN_READONLY)
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to %v, %v", conn, err)
 	}
@@ -190,29 +208,69 @@ func (f *Firefox) ExtractToken() (string, error) {
 		}
 		return tempJWTStruct.AccessToken, nil
 	}
-	return "", fmt.Errorf("token was not found from %s", f.PathToDB)
+	return "", fmt.Errorf("token was not found from %s", f.pathToDB)
 }
 
-func ExtractTokenChrome() {
+func (c *Chrome) ExtractToken() (string, error) {
 	chrome := NewChrome()
 	fmt.Print(chrome, "\n")
+	return "", nil
 }
 
-// loadToken generate a new uuid from local storage
-func loadToken() uuid.UUID {
-	return uuid.New()
+// Decode the token extracted from local storage
+func decodeJWT(encodedToken string) (*[]byte, error) {
+	token := strings.Split(encodedToken, ".")[1]
+	padding := len(token) % 4
+	token += strings.Repeat("=", 4-padding)
+	decodedToken, err := base64.URLEncoding.DecodeString(token)
+	if err != nil {
+		return nil, err
+	}
+	return &decodedToken, nil
 }
 
-// def _decode_jwt(payload: str) -> dict[str, Any]:
-//     # idk how this would happen but better safe than sorry
-//     # and make easier debugging in the event this happens
-//     if not isinstance(payload, str):
-//         raise ValueError(
-//             f"payload {payload} was of type {type(payload)} not str"
-//         )
-//     payload_b64 = payload.split(".")[1]
-//     payload_b64 += "=" * (-len(payload_b64) % 4)
-//     decoded_payload: dict[str, Any] = json.loads(
-//         base64.urlsafe_b64decode(payload_b64).decode()
-//     )
-//     return decoded_payload
+// ReturnJWTExpiration returns the the JWT expiration
+func ReturnJWTExpiration(encodedToken string) (*time.Time, error) {
+	bytesJWT, err := decodeJWT(encodedToken)
+	if err != nil {
+		return nil, err
+	}
+	var exp struct {
+		Exp int64 `json:"exp"`
+	}
+	err = json.Unmarshal(*bytesJWT, &exp)
+	if err != nil {
+		return nil, err
+	}
+	expDate := time.Unix(exp.Exp, 0)
+	return &expDate, nil
+}
+
+// ValidateToken returns False on invalid token or on error
+//
+// e.g. expired, malformed-token, etc.
+//
+// Uses https://api.robinhood.com/accounts/ as the endpoint
+func (rh *RobinhoodClient) ValidateToken(token string) (bool, error) {
+	expiration, err := ReturnJWTExpiration(token)
+	if err != nil {
+		return false, err
+	}
+	if expiration.Compare(time.Now().UTC()) < 0 {
+		return false, fmt.Errorf("token is expired")
+	}
+	const apiAcc = "/accounts/"
+	request, err := rh.BuildGetRequest(apiAcc, nil)
+	if err != nil {
+		return false, err
+	}
+	request.Header.Add("Authorization", "Bearer "+token)
+	response, err := rh.DoGetRequest(request)
+	if err != nil {
+		return false, err
+	}
+	if response.StatusCode > 300 {
+		return false, fmt.Errorf("reponse returned %d", response.StatusCode)
+	}
+	return true, nil
+}
