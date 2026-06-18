@@ -260,12 +260,12 @@ func (rh *RobinhoodClient) ValidateToken(token string) (bool, error) {
 		return false, fmt.Errorf("token is expired")
 	}
 	const apiAcc = "/accounts/"
-	request, err := rh.BuildGetRequest(apiAcc, nil)
+	request, err := rh.buildGetRequest(apiAcc, nil)
 	if err != nil {
 		return false, err
 	}
 	request.Header.Add("Authorization", "Bearer "+token)
-	response, err := rh.DoGetRequest(request)
+	response, err := rh.doGetRequest(request)
 	if err != nil {
 		return false, err
 	}

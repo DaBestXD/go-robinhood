@@ -29,7 +29,7 @@ func NewRobinhoodClient(browser Browser) *RobinhoodClient {
 // BuildGetRequest takes an endpoint e.g. "/accounts/"
 //
 // Params be nil or mapping of string, string e.g. "symbols : 'SPY'"
-func (rh *RobinhoodClient) BuildGetRequest(endpoint string, params *map[string]string) (*http.Request, error) {
+func (rh *RobinhoodClient) buildGetRequest(endpoint string, params *map[string]string) (*http.Request, error) {
 	request, err := http.NewRequest(http.MethodGet, rh.BaseURL+endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func (rh *RobinhoodClient) BuildGetRequest(endpoint string, params *map[string]s
 	return request, nil
 }
 
-func (rh *RobinhoodClient) DoGetRequest(request *http.Request) (*http.Response, error) {
+func (rh *RobinhoodClient) doGetRequest(request *http.Request) (*http.Response, error) {
 	response, err := rh.HTTPClient.Do(request)
 	if err != nil {
 		return nil, err
