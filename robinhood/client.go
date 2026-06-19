@@ -12,6 +12,15 @@ type RobinhoodClient struct {
 	AccessToken string
 }
 
+type Browser interface {
+	String() string
+	// TODO: implement this later
+	// OpenAndClose(waitTime float64, headless bool)
+	ExtractToken() (string, error)
+	PathToDB() string
+	PathToExecutable() string
+}
+
 func NewRobinhoodClient(browser Browser) *RobinhoodClient {
 	token, err := browser.ExtractToken()
 	if err != nil {
