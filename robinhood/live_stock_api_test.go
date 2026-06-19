@@ -43,31 +43,3 @@ func TestGetStockQuotes(t *testing.T) {
 		}
 	}
 }
-
-func TestGetStockQuote(t *testing.T) {
-	rh := robinhood.NewRobinhoodClient(robinhood.NewFirefox())
-
-	validSymbol := "TSLA"
-	quote, err := rh.GetStockQuote(validSymbol)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	if quote == nil {
-		t.Fatalf("expected quote for %s, got nil", validSymbol)
-	}
-
-	if quote.Symbol != validSymbol {
-		t.Fatalf("expected symbol %s, got %s", validSymbol, quote.Symbol)
-	}
-
-	badSymbol := "BADSYMBOL"
-	quote, err = rh.GetStockQuote(badSymbol)
-	if err == nil {
-		t.Fatalf("expected error for %s, got nil", badSymbol)
-	}
-
-	if quote != nil {
-		t.Fatalf("expected nil quote for %s, got %+v", badSymbol, quote)
-	}
-}

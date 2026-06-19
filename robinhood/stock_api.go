@@ -34,37 +34,6 @@ type StockQuotes struct {
 	Results []*StockQuote `json:"results"`
 }
 
-// GetStockQuote returns a StockQuote struct
-//
-// Uses /quotes/{symbol}/ endpoint
-//
-// Example: "SPY" or "spy"
-func (rh *RobinhoodClient) GetStockQuote(symbol string) (*StockQuote, error) {
-	symbol = strings.ToUpper(symbol)
-	request, err := rh.buildGetRequest(APIQuotes+symbol+"/", nil)
-	if err != nil {
-		return nil, err
-	}
-	response, err := rh.doGetRequest(request)
-	if err != nil {
-		return nil, err
-	}
-	body, err := io.ReadAll(response.Body)
-	defer response.Body.Close() //nolint:errcheck
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("bad status %s: %s", response.Status, string(body))
-	}
-	if err != nil {
-		return nil, err
-	}
-	var stockQuote StockQuote
-	err = json.Unmarshal(body, &stockQuote)
-	if err != nil {
-		return nil, err
-	}
-	return &stockQuote, nil
-}
-
 // GetStockQuotes returns a pointer to a StockQuotes struct
 //
 // Uses /quotes/?symbols=..., endpoint
@@ -113,28 +82,6 @@ type StockInfo struct {
 
 type StockInfos struct {
 	Results []*StockInfo `json:"results"`
-}
-
-func (rh *RobinhoodClient) GetStockInfo(symbol string) (*StockInfo, error) {
-	request, err := rh.buildGetRequest(APIInstrumemts+symbol+"/", nil)
-	if err != nil {
-		return nil, err
-	}
-	response, err := rh.doGetRequest(request)
-	if err != nil {
-		return nil, err
-	}
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, err
-	}
-	var stockInfo StockInfo
-	err = json.Unmarshal(body, &stockInfo)
-	if err != nil {
-		return nil, err
-	}
-
-	return &stockInfo, nil
 }
 
 func (rh *RobinhoodClient) GetStockInfos(symbols ...string) (*StockInfos, error) {

@@ -27,6 +27,7 @@ type (
 		ActiveContractID   string  `json:"activeFuturesContractId"`
 		Symbol             string  `json:"displaySymbol"`
 		SymbolWithExchange string  `json:"symbol"`
+		SimpleName         string  `json:"simpleName"`
 		Currency           string  `json:"currency"`
 		Country            string  `json:"country"`
 		DeliveryType       string  `json:"delivery"`
@@ -81,7 +82,9 @@ func (f *futureTradingHours) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// GetAllFutureProducts TODO: Add better doc string about any jankyness, etc.
+// GetAllFutureProducts returns all future products
+// Warning: the ordering of the prodcuts returned is randomized
+// TODO: Add better doc string about any jankness, etc.
 func (rh *RobinhoodClient) GetAllFutureProducts() (*FutureProducts, error) {
 	request, err := rh.buildGetRequest(APIFuturesProducts, nil)
 	if err != nil {
@@ -103,29 +106,31 @@ func (rh *RobinhoodClient) GetAllFutureProducts() (*FutureProducts, error) {
 	return &results, nil
 }
 
-// GetFutureProduct only supports ContractID not future Symbol
-func (rh *RobinhoodClient) GetFutureProduct(contractID string) {
-}
-
-// GetFutureQuote only supports ContractID not future Symbol
-func (rh *RobinhoodClient) GetFutureQuote(contractID string) error {
-	builtURL := APIFuturesQuotes + contractID + "/"
-	request, err := rh.buildGetRequest(builtURL, nil)
+// GetFutureProductInfos only supports ContractID not future Symbol
+// or ActiveContractID from FutureProduct struct
+func (rh *RobinhoodClient) GetFutureProductInfos(contractID ...string) (*FutureProducts, error) {
+	request, err := rh.buildGetRequest(
+		APIFuturesProducts,
+		&map[string]string{"product_ids": strings.Join(contractID, ",")},
+	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	response, err := rh.doGetRequest(request)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fmt.Printf("%d\n", response.StatusCode)
 	defer response.Body.Close() //nolint:errcheck
-	fmt.Printf("%s\n\n", string(body))
-	return nil
+	var futureProducts FutureProducts
+	err = json.Unmarshal(body, &futureProducts)
+	if err != nil {
+		return nil, err
+	}
+	return &futureProducts, nil
 }
 
 func (rh *RobinhoodClient) GetFutureQuotes(contractIDs ...string) error {
@@ -144,8 +149,31 @@ func (rh *RobinhoodClient) GetFutureQuotes(contractIDs ...string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%d\n", response.StatusCode)
+	var futureJSON futureJSON
+	err = json.Unmarshal(body, &futureJSON)
+	if err != nil {
+		return err
+	}
 	defer response.Body.Close() //nolint:errcheck
 	fmt.Print(string(body), "\n\n")
+	return nil
+}
+
+type futureJSON struct {
+	Status testStruct `json:"status"`
+}
+
+type testStruct struct {
+	Status string `json:"status"`
+}
+
+func (t *testStruct) UnmarshalJSON(data []byte) error {
+	var futureJSON struct {
+		Status string `json:"status"`
+	}
+	if futureJSON.Status != "SUCCESS" {
+		return fmt.Errorf("returned %s", futureJSON.Status)
+	}
+
 	return nil
 }
