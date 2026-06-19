@@ -152,10 +152,15 @@ func getFirefoxDBPath(homeDir string) string {
 		}
 		return DBPath
 	case "linux":
+		// TODO: implement this sometime
 		DBPath := ""
 		return DBPath
 	case "windows":
-		DBPath := ""
+		DBPath := filepath.Join(homeDir, FirefoxPathToProfileWindows)
+		DBPath, err := findFirefoxProfile(DBPath)
+		if err != nil {
+			panic(fmt.Errorf("failed to read %s, %v", DBPath, err))
+		}
 		return DBPath
 	default:
 		panic(fmt.Errorf("platform is not supported %s", runtime.GOOS))
