@@ -18,10 +18,10 @@ const (
 //
 // Does not require authentication
 type StockQuote struct {
-	AskPrice float64 `json:"ask_price,string"`
+	AskPrice float32 `json:"ask_price,string"`
 	AskSize  int32   `json:"ask_size"`
 	BidSize  int32   `json:"bid_size"`
-	BidPrice float64 `json:"bid_price,string"`
+	BidPrice float32 `json:"bid_price,string"`
 	Symbol   string  `json:"symbol"`
 	// TODO: InstrumentID should probably change this but I'll figure this out when
 	// I implement the robinhood watchlist to keep consistent naming
@@ -43,6 +43,7 @@ type StockQuotes struct {
 // If invalid symbol returns nil for that symbol
 func (rh *RobinhoodClient) GetStockQuotes(symbols ...string) (*StockQuotes, error) {
 	request, err := rh.buildGetRequest(
+		nil,
 		APIQuotes,
 		&map[string]string{
 			"symbols": normalizeSymbols(symbols),
@@ -86,6 +87,7 @@ type StockInfos struct {
 
 func (rh *RobinhoodClient) GetStockInfos(symbols ...string) (*StockInfos, error) {
 	request, err := rh.buildGetRequest(
+		nil,
 		APIInstrumemts,
 		&map[string]string{"symbols": normalizeSymbols(symbols)},
 	)

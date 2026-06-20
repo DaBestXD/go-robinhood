@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -40,6 +41,20 @@ type (
 
 	FutureProducts struct {
 		Results []*FutureProduct `json:"results"`
+	}
+
+	FutureQuote struct {
+		ID             string  `json:"instrument_id"`
+		AskPrice       float32 `json:"ask_price,string"`
+		BidPrice       float32 `json:"bid_price,string"`
+		LastTradePrice float32 `json:"last_trade_price,string"`
+		AskSize        int32   `json:"ask_size"`
+		BidSize        int32   `json:"bid_size"`
+		LastTradeSize  int32   `json:"last_trade_size"`
+	}
+
+	FutureQuotes struct {
+		Results []*FutureQuote `json:"data"`
 	}
 )
 
@@ -86,7 +101,10 @@ func (f *futureTradingHours) UnmarshalJSON(data []byte) error {
 // Warning: the ordering of the prodcuts returned is randomized
 // TODO: Add better doc string about any jankness, etc.
 func (rh *RobinhoodClient) GetAllFutureProducts() (*FutureProducts, error) {
-	request, err := rh.buildGetRequest(APIFuturesProducts, nil)
+	request, err := rh.buildGetRequest(
+		nil,
+		APIFuturesProducts,
+		nil)
 	if err != nil {
 		return nil, err
 	}
@@ -110,6 +128,7 @@ func (rh *RobinhoodClient) GetAllFutureProducts() (*FutureProducts, error) {
 // or ActiveContractID from FutureProduct struct
 func (rh *RobinhoodClient) GetFutureProductInfos(contractID ...string) (*FutureProducts, error) {
 	request, err := rh.buildGetRequest(
+		nil,
 		APIFuturesProducts,
 		&map[string]string{"product_ids": strings.Join(contractID, ",")},
 	)
@@ -133,47 +152,52 @@ func (rh *RobinhoodClient) GetFutureProductInfos(contractID ...string) (*FutureP
 	return &futureProducts, nil
 }
 
-func (rh *RobinhoodClient) GetFutureQuotes(contractIDs ...string) error {
+// Helper function for extactly just the future quote endpoint because robinhood
+// probably got aids creating ts
+// For invalid option ids will return nil in results
+func (rh *RobinhoodClient) doGetRequestFutureQuote(request *http.Request) (*FutureQuotes, error) {
+	response, err := rh.HTTPClient.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	var results struct {
+		Results []*struct {
+			Status string      `json:"STATUS"`
+			Inner  FutureQuote `json:"data"`
+		} `json:"data"`
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(body, &results)
+	if err != nil {
+		return nil, err
+	}
+	var futureQuotes FutureQuotes
+	for _, v := range results.Results {
+		// IDK how to return a nil pointer
+		if v.Status != "SUCCESS" {
+			futureQuotes.Results = append(futureQuotes.Results, nil)
+		} else {
+			futureQuotes.Results = append(futureQuotes.Results, &v.Inner)
+		}
+	}
+	return &futureQuotes, nil
+}
+
+func (rh *RobinhoodClient) GetFutureQuotes(contractIDs ...string) (*FutureQuotes, error) {
 	request, err := rh.buildGetRequest(
+		nil,
 		APIFuturesQuotes,
 		&map[string]string{"ids": strings.Join(contractIDs, ",")},
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	response, err := rh.doGetRequest(request)
+	quotes, err := rh.doGetRequestFutureQuote(request)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return err
-	}
-	var futureJSON futureJSON
-	err = json.Unmarshal(body, &futureJSON)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close() //nolint:errcheck
-	fmt.Print(string(body), "\n\n")
-	return nil
-}
-
-type futureJSON struct {
-	Status testStruct `json:"status"`
-}
-
-type testStruct struct {
-	Status string `json:"status"`
-}
-
-func (t *testStruct) UnmarshalJSON(data []byte) error {
-	var futureJSON struct {
-		Status string `json:"status"`
-	}
-	if futureJSON.Status != "SUCCESS" {
-		return fmt.Errorf("returned %s", futureJSON.Status)
-	}
-
-	return nil
+	return quotes, nil
 }

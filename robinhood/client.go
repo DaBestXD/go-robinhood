@@ -8,7 +8,6 @@ import (
 
 type RobinhoodClient struct {
 	HTTPClient  *http.Client
-	BaseURL     string
 	AccessToken string
 }
 
@@ -30,22 +29,35 @@ func NewRobinhoodClient(browser Browser) *RobinhoodClient {
 		HTTPClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		BaseURL:     "https://api.robinhood.com",
 		AccessToken: token,
 	}
 }
 
+const (
+	BaseURL    = "https://api.robinhood.com"
+	BonfireURL = "https://bonfire.robinhood.com"
+	NummusURL  = "https://nummus.robinhood.com"
+)
+
 // BuildGetRequest takes an endpoint e.g. "/accounts/"
 //
 // Params be nil or mapping of string, string e.g. "symbols : 'SPY'"
-func (rh *RobinhoodClient) buildGetRequest(endpoint string, params *map[string]string) (*http.Request, error) {
-	request, err := http.NewRequest(http.MethodGet, rh.BaseURL+endpoint, nil)
+func (rh *RobinhoodClient) buildGetRequest(
+	baseURL *string,
+	endpoint string,
+	params *map[string]string,
+) (*http.Request, error) {
+	if baseURL == nil {
+		baseURL = strPtr(BaseURL)
+	}
+	request, err := http.NewRequest(
+		http.MethodGet,
+		*baseURL+endpoint,
+		nil)
 	if err != nil {
 		return nil, err
 	}
-	if rh.AccessToken != "" {
-		request.Header.Set("Authorization", "Bearer "+rh.AccessToken)
-	}
+	request.Header.Set("Authorization", "Bearer "+rh.AccessToken)
 	request.Header.Set("Accept", "application/json")
 	query := request.URL.Query()
 	if params != nil {
@@ -66,4 +78,10 @@ func (rh *RobinhoodClient) doGetRequest(request *http.Request) (*http.Response, 
 		return nil, fmt.Errorf("bad status code %d", response.StatusCode)
 	}
 	return response, nil
+}
+
+// Thank you stackoverflow 😸
+// stackoverflow.com/questions/30731687/how-do-i-represent-an-optional-string-in-go
+func strPtr(str string) *string {
+	return &str
 }
