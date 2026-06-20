@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
 	"time"
 )
@@ -152,40 +151,7 @@ func (rh *RobinhoodClient) GetFutureProductInfos(contractID ...string) (*FutureP
 	return &futureProducts, nil
 }
 
-// Helper function for extactly just the future quote endpoint because robinhood
-// probably got aids creating ts
-// For invalid option ids will return nil in results
-func (rh *RobinhoodClient) doGetRequestFutureQuote(request *http.Request) (*FutureQuotes, error) {
-	response, err := rh.HTTPClient.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	var results struct {
-		Results []*struct {
-			Status string      `json:"STATUS"`
-			Inner  FutureQuote `json:"data"`
-		} `json:"data"`
-	}
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, err
-	}
-	err = json.Unmarshal(body, &results)
-	if err != nil {
-		return nil, err
-	}
-	var futureQuotes FutureQuotes
-	for _, v := range results.Results {
-		// IDK how to return a nil pointer
-		if v.Status != "SUCCESS" {
-			futureQuotes.Results = append(futureQuotes.Results, nil)
-		} else {
-			futureQuotes.Results = append(futureQuotes.Results, &v.Inner)
-		}
-	}
-	return &futureQuotes, nil
-}
-
+// GetFutureQuotes bad contract ids will return nil object
 func (rh *RobinhoodClient) GetFutureQuotes(contractIDs ...string) (*FutureQuotes, error) {
 	request, err := rh.buildGetRequest(
 		nil,
@@ -195,9 +161,13 @@ func (rh *RobinhoodClient) GetFutureQuotes(contractIDs ...string) (*FutureQuotes
 	if err != nil {
 		return nil, err
 	}
-	quotes, err := rh.doGetRequestFutureQuote(request)
+	quotes, err := doNestedGetRequest[FutureQuote](rh, request)
 	if err != nil {
 		return nil, err
 	}
-	return quotes, nil
+	var futureQuotes FutureQuotes
+	for _, v := range quotes.Results {
+		futureQuotes.Results = append(futureQuotes.Results, v.Results)
+	}
+	return &futureQuotes, nil
 }
